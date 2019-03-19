@@ -1,8 +1,8 @@
 package goflux
 
 var Dispatcher = &dispatcher{
-	register:   make(chan chan *Action),
-	unRegister: make(chan chan *Action),
+	register:   make(chan chan *Action, 10),
+	unRegister: make(chan chan *Action, 10),
 	sendAction: make(chan *Action, 10),
 }
 
