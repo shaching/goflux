@@ -50,9 +50,9 @@ goflux.Send(goflux.NewAction(foo2, bar2))
 * Notice: You can filter action here.
 
 ```golang
-go f.run()
+go f.store()
 
-func (f *foo) run() {
+func (f *foo) store() {
     for {
         action, ok := <-f.listener
 	if !ok {
@@ -65,9 +65,9 @@ func (f *foo) run() {
 ```
 
 ```golang
-go b.run()
+go b.store()
 
-func (b *bar) run() {
+func (b *bar) store() {
     for {
         action, ok := <-b.listener
         if !ok {
