@@ -1,14 +1,19 @@
 package goflux
 
+import (
+	"log"
+	"sync"
+)
+
 var Dispatcher = &dispatcher{
-	register:   make(chan chan *Action, 10),
-	unRegister: make(chan chan *Action, 10),
-	sendAction: make(chan *Action, 10),
+	register:   make(chan *flux, 512),
+	unRegister: make(chan *flux, 512),
+	sendAction: make(chan *Action, 512),
 }
 
 type dispatcher struct {
-	register   chan chan *Action
-	unRegister chan chan *Action
+	register   chan *flux
+	unRegister chan *flux
 	sendAction chan *Action
 }
 
@@ -17,20 +22,43 @@ func init() {
 }
 
 func (d *dispatcher) run() {
-	listeners := make(map[chan *Action]chan *Action)
+	mutex := sync.Mutex{}
+	listenerGroup := make(map[interface{}]map[chan *Action]interface{})
 
 	for {
+		mutex.Lock()
 		select {
-		case listener := <-d.register:
-			listeners[listener] = listener
-		case listener := <-d.unRegister:
-			delete(listeners, listener)
-			close(listener)
-			listener = nil
+		case flux := <-d.register:
+			if _, ok := listenerGroup[flux.identity]; ok {
+				listeners := listenerGroup[flux.identity]
+				listeners[flux.listener] = flux.identity
+			} else {
+				listeners := make(map[chan *Action]interface{})
+				listeners[flux.listener] = flux.identity
+				listenerGroup[flux.identity] = listeners
+			}
+		case flux := <-d.unRegister:
+			if _, ok := listenerGroup[flux.identity]; ok {
+				listeners := listenerGroup[flux.identity]
+				delete(listeners, flux.listener)
+				close(flux.listener)
+				flux.listener = nil
+			} else {
+				log.Println("UnRegister: Can't find the flux listener.")
+			}
 		case action := <-d.sendAction:
-			for listener := range listeners {
-				listener <- action
+			if _, ok := listenerGroup[action.to]; ok {
+				for listener := range listenerGroup[action.to] {
+					listener <- action
+
+					if len(listener) >= cap(listener) {
+						log.Println("SendAction: The flux listener is overflow.", action)
+					}
+				}
+			} else {
+				log.Println("SendAction: Can't find the flux listener.")
 			}
 		}
+		mutex.Unlock()
 	}
 }

@@ -1,13 +1,13 @@
 package goflux
 
-func Register(listener chan *Action) {
-	Dispatcher.register <- listener
+type flux struct {
+	identity interface{}
+	listener chan *Action
 }
 
-func UnRegister(listener chan *Action) {
-	Dispatcher.unRegister <- listener
-}
-
-func Send(action *Action) {
-	Dispatcher.sendAction <- action
+func newFlux(identity interface{}, listener chan *Action) *flux {
+	return &flux{
+		identity: identity,
+		listener: listener,
+	}
 }
