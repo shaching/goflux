@@ -28,6 +28,6 @@ func (a *Action) To() interface{} {
 	return a.to
 }
 
-func (a *Action) Payload() interface{} {
-	return a.payload
+func (a *Action) Payload() []interface{} {
+	return a.payload.([]interface{})
 }

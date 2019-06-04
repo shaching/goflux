@@ -14,20 +14,24 @@ go get github.com/shaching/goflux
     
 ```golang
 type earth struct {
+    address   string
     listener  chan *goflux.Action
 }
 
-&earth{
+e := &earth{
+    address:   "Earth",
     listener:  make(chan *goflux.Action),
 }
 ```
 
 ```golang
 type mars struct {
+    address   string
     listener  chan *goflux.Action
 }
 
-&mars{
+m := &mars{
+    address:   "Mars",
     listener:  make(chan *goflux.Action),
 }
 ```
@@ -39,9 +43,9 @@ type mars struct {
 * payload: data.
 
 ```golang
-goflux.Send("ActionCall", "Earth", "Mars", "Hi, Mars.")
+goflux.Send("ActionCall", "Earth", "Mars", "Hi", "Mom")
 or
-goflux.Send("ActionReCall", "Mars", "Earth", "Hello, Earth.")
+goflux.Send("ActionReCall", "Mars", "Earth", "Hello", "Dad")
 ```
 
 # Step 4. Implement your flux store with goroutine listener func.
@@ -49,10 +53,10 @@ goflux.Send("ActionReCall", "Mars", "Earth", "Hello, Earth.")
 * Notice: You can filter action here.
 
 ```golang
-go f.store()
+go e.store() <-- Start goroutine.
 
 func (e *earth) store() {
-    goflux.Register(e.listener)
+    goflux.Register(e.address, e.listener) <-- Register Flux.
 
     for {
         action, ok := <-e.listener
@@ -60,17 +64,23 @@ func (e *earth) store() {
         if !ok {
             return
         }
-        // will receive action "ActionReCall" and "Hello, Earth." payload
+        
+        // action.Name().(string)        --> ActionReCall
+        // action.From().(string)        --> Mars
+        // action.To().(string)          --> Earth
+        // action.Payload()[0].(string)  --> Hello
+        // action.Payload()[1].(string)  --> Dad
+
         // you can handle received action here
     }
 }
 ```
 
 ```golang
-go b.store()
+go m.store() <-- Start goroutine.
 
 func (m *mars) store() {
-    goflux.Register(m.listener)
+    goflux.Register(m.address, m.listener) <-- Register Flux.
     
     for {
         action, ok := <-m.listener
@@ -78,7 +88,13 @@ func (m *mars) store() {
         if !ok {
             return
         }
-        // will receive action "ActionCall" and "Hi, Mars." payload
+        
+        // action.Name().(string)        --> ActionCall
+        // action.From().(string)        --> Earth
+        // action.To().(string)          --> Mars
+        // action.Payload()[0].(string)  --> Hi
+        // action.Payload()[1].(string)  --> Mom
+        
         // you can handle received action here
     }
 }
@@ -88,7 +104,7 @@ func (m *mars) store() {
 * Notice: DON'T manual close channel by yourself, goflux will automatic close it. 
 
 ```golang
-goflux.UnRegister(e.listener)
+goflux.UnRegister(e.address, e.listener)
 or
-goflux.UnRegister(m.listener)
+goflux.UnRegister(m.address, m.listener)
 ```
