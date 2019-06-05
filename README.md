@@ -1,4 +1,5 @@
 # goflux
+> Callback is usually used between different objects' data transmission and it will cause callback hell. So, decoupling is must necessary and goflux can solve the problem.
 
 ## What is FLUX? See Here https://facebook.github.io/flux/
 
