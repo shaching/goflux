@@ -1,8 +1,21 @@
+// Copyright (C) 2019 JohnnyChu(chuhsun@gmail.com)
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package goflux
 
 import (
 	"log"
-	"sync"
 )
 
 var Dispatcher = &dispatcher{
@@ -22,15 +35,12 @@ func init() {
 }
 
 func (d *dispatcher) run() {
-	mutex := sync.Mutex{}
 	listenerGroup := make(map[interface{}]map[chan *Action]interface{})
 
 	for {
-		mutex.Lock()
 		select {
 		case flux := <-d.register:
-			if _, ok := listenerGroup[flux.identity]; ok {
-				listeners := listenerGroup[flux.identity]
+			if listeners, ok := listenerGroup[flux.identity]; ok {
 				listeners[flux.listener] = flux.identity
 			} else {
 				listeners := make(map[chan *Action]interface{})
@@ -38,8 +48,7 @@ func (d *dispatcher) run() {
 				listenerGroup[flux.identity] = listeners
 			}
 		case flux := <-d.unRegister:
-			if _, ok := listenerGroup[flux.identity]; ok {
-				listeners := listenerGroup[flux.identity]
+			if listeners, ok := listenerGroup[flux.identity]; ok {
 				delete(listeners, flux.listener)
 				close(flux.listener)
 				flux.listener = nil
@@ -47,8 +56,8 @@ func (d *dispatcher) run() {
 				log.Println("UnRegister: Can't find the flux listener.")
 			}
 		case action := <-d.sendAction:
-			if _, ok := listenerGroup[action.to]; ok {
-				for listener := range listenerGroup[action.to] {
+			if listeners, ok := listenerGroup[action.to]; ok {
+				for listener := range listeners {
 					listener <- action
 
 					if len(listener) >= cap(listener) {
@@ -59,6 +68,5 @@ func (d *dispatcher) run() {
 				log.Println("SendAction: Can't find the flux listener.")
 			}
 		}
-		mutex.Unlock()
 	}
 }
