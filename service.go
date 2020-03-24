@@ -14,14 +14,24 @@
 
 package goflux
 
+func Init(workers int) {
+    Dispatcher.start(workers)
+}
+
 func Register(identity interface{}, listener chan *Action) {
-	Dispatcher.register <- newFlux(identity, listener)
+    Dispatcher.register <- newFlux(identity, listener)
 }
 
 func UnRegister(identity interface{}, listener chan *Action) {
-	Dispatcher.unRegister <- newFlux(identity, listener)
+    Dispatcher.unRegister <- newFlux(identity, listener)
 }
 
-func Send(name, from, to interface{}, payload ...interface{}) {
-	Dispatcher.sendAction <- newAction(name, from, to, payload)
+func Async(name, from, to interface{}, payload ...interface{}) {
+    Dispatcher.async <- newAction(name, from, to, payload)
+}
+
+func Sync(name, from, to interface{}, payload ...interface{}) chan bool {
+    action := newAction(name, from, to, payload)
+    Dispatcher.sync <- action
+    return action.sync
 }

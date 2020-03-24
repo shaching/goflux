@@ -15,33 +15,39 @@
 package goflux
 
 type Action struct {
-	name    interface{}
-	from    interface{}
-	to      interface{}
-	payload interface{}
+    name    interface{}
+    from    interface{}
+    to      interface{}
+    payload interface{}
+    sync    chan bool
 }
 
 func newAction(name, from, to, payload interface{}) *Action {
-	return &Action{
-		name:    name,
-		from:    from,
-		to:      to,
-		payload: payload,
-	}
+    return &Action{
+        name:    name,
+        from:    from,
+        to:      to,
+        payload: payload,
+        sync:    make(chan bool, 1024),
+    }
 }
 
 func (a *Action) Name() interface{} {
-	return a.name
+    return a.name
 }
 
 func (a *Action) From() interface{} {
-	return a.from
+    return a.from
 }
 
 func (a *Action) To() interface{} {
-	return a.to
+    return a.to
 }
 
 func (a *Action) Payload() []interface{} {
-	return a.payload.([]interface{})
+    return a.payload.([]interface{})
+}
+
+func (a *Action) Sync() chan bool {
+    return a.sync
 }

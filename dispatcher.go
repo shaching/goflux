@@ -15,58 +15,107 @@
 package goflux
 
 import (
-	"log"
+    "log"
+    "sync"
+)
+
+const (
+    ActionFluxRegistered = "ActionFluxRegistered"
 )
 
 var Dispatcher = &dispatcher{
-	register:   make(chan *flux, 512),
-	unRegister: make(chan *flux, 512),
-	sendAction: make(chan *Action, 512),
+    register:   make(chan *flux, 1024),
+    unRegister: make(chan *flux, 1024),
+    async:      make(chan *Action, 1024),
+    sync:       make(chan *Action, 1024),
+    rwMutex:    &sync.RWMutex{},
 }
 
 type dispatcher struct {
-	register   chan *flux
-	unRegister chan *flux
-	sendAction chan *Action
+    register   chan *flux
+    unRegister chan *flux
+    async      chan *Action
+    sync       chan *Action
+    rwMutex    *sync.RWMutex
 }
 
-func init() {
-	go Dispatcher.run()
+func (d *dispatcher) start(workers int) {
+    listenerGroup := make(map[interface{}]map[chan *Action]interface{})
+
+    if workers <= 0 {
+        workers = 10
+    }
+
+    for i := 0; i < workers; i++ {
+        go Dispatcher.run(listenerGroup)
+    }
 }
 
-func (d *dispatcher) run() {
-	listenerGroup := make(map[interface{}]map[chan *Action]interface{})
+func (d *dispatcher) run(listenerGroup map[interface{}]map[chan *Action]interface{}) {
+    for {
+        select {
+        case flux := <-d.register:
+            d.rwMutex.Lock()
 
-	for {
-		select {
-		case flux := <-d.register:
-			if listeners, ok := listenerGroup[flux.identity]; ok {
-				listeners[flux.listener] = flux.identity
-			} else {
-				listeners := make(map[chan *Action]interface{})
-				listeners[flux.listener] = flux.identity
-				listenerGroup[flux.identity] = listeners
-			}
-		case flux := <-d.unRegister:
-			if listeners, ok := listenerGroup[flux.identity]; ok {
-				delete(listeners, flux.listener)
-				close(flux.listener)
-				flux.listener = nil
-			} else {
-				log.Println("UnRegister: Can't find the flux listener.")
-			}
-		case action := <-d.sendAction:
-			if listeners, ok := listenerGroup[action.to]; ok {
-				for listener := range listeners {
-					listener <- action
+            if listeners, ok := listenerGroup[flux.identity]; ok {
+                listeners[flux.listener] = flux.identity
+            } else {
+                listeners := make(map[chan *Action]interface{})
+                listeners[flux.listener] = flux.identity
+                listenerGroup[flux.identity] = listeners
+            }
 
-					if len(listener) >= cap(listener) {
-						log.Println("SendAction: The flux listener is overflow.", action)
-					}
-				}
-			} else {
-				log.Println("SendAction: Can't find the flux listener.")
-			}
-		}
-	}
+            flux.listener <- newAction(ActionFluxRegistered, "", flux.listener, "")
+
+            d.rwMutex.Unlock()
+
+        case flux := <-d.unRegister:
+            d.rwMutex.Lock()
+
+            if listeners, ok := listenerGroup[flux.identity]; ok {
+                delete(listeners, flux.listener)
+                close(flux.listener)
+                flux.listener = nil
+            } else {
+                log.Println("UnRegister: Can't find the flux listener.")
+            }
+
+            d.rwMutex.Unlock()
+
+        case action := <-d.async:
+            d.rwMutex.RLock()
+
+            if listeners, ok := listenerGroup[action.to]; ok {
+                for listener := range listeners {
+                    listener <- action
+
+                    if len(listener) >= cap(listener) {
+                        log.Println("SendAction: The flux listener is overflow.", action)
+                    }
+                }
+            } else {
+                log.Println("SendAction: Can't find the flux listener.")
+            }
+
+            d.rwMutex.RUnlock()
+
+        case action := <-d.sync:
+            d.rwMutex.RLock()
+
+            if listeners, ok := listenerGroup[action.to]; ok {
+                for listener := range listeners {
+                    listener <- action
+
+                    if len(listener) >= cap(listener) {
+                        log.Println("SendAction: The flux listener is overflow.", action)
+                    }
+                }
+            } else {
+                log.Println("SendAction: Can't find the flux listener.")
+                action.sync <- false
+            }
+
+            d.rwMutex.RUnlock()
+        }
+    }
 }
